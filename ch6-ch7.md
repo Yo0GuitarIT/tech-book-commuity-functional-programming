@@ -11,7 +11,7 @@ paginate: true
 Ch6 在變動的程式中讓資料保持不變
 Ch7 讓不變性不受外來程式破壞
 
-Speaker： Yo0
+Presenter： Yo0
 Note Taker：Lois
 2025/05/01 @Tech-Book-Community
 
@@ -1188,46 +1188,715 @@ function setPrice(item, new_price) {
 
 ## 7.1 是用既有程式(legacy code)時的不變性
 
+`背景情境`
+MegaMart 每週會推出一項黑色星期五促銷活動，讓行銷部門能夠快速驗證促銷活動的效果。  
+門店系統中已經有處理購物車的既有程式，而且使用數年，經過多次測試、運作穩定。
+
+> 👨‍💼:「本週黑色星期五是買三送一，我要把折扣邏輯加入購物車的程式碼，剛好又要執行結帳流程測試！」
+
+> 👩🏼‍💻:「糟了！那段程式沒有人看得懂，這樣更動確定不會壞掉？」
+
+---
+
+## 🔖 小字典：  
+
+### Legacy code（既有程式碼）
+
+是指已經存在的程式碼，通常沒有測試，或是難以更改。
+例如這段程式碼 `black_friday_promotion()` 就是 legacy code。
+
+---
+
+## 程式碼片段：加入商品至購物車
+
+```javascript
+function add_item_to_cart(name, price) {
+    var item = make_cart_item(name, price);
+    shopping_cart = add_item(shopping_cart, item);
+    var total = calc_total(shopping_cart);
+    set_cart_total_dom(total);
+    update_shipping_icons(shopping_cart);
+    update_tax_dom(total);
+    black_friday_promotion(shopping_cart); // 新增的促銷行為
+}
+```
+
+我們很少人能讀懂這段程式，但實質改變購物車行為的內容就藏在 `black_friday_promotion()`。
+
+---
+
+問題:
+`black_friday_promotion()` 會破壞寫入時複製，讓函式行為不再固定可預期。
+
+幸運的是，防禦型複製（defensive copying）可以解決這個問題。
+
 ---
 
 ## 7.2 寫入時複製函式需與未實作不變性的函式互動
+
+`black_friday_promotion()`並沒有實作寫入時複製，所以是不受信任的函式。
+此處「不受信任」不是指不安全，而是「該函式可能會修改資料」。
+
+---
+
+假設把所有程式碼納入下圖的兩個圓圈中，位於「安全區」內的可信任函式皆能保持資料不變，也就是說，你可以放心使用這些程式碼。
+
+`black_friday_promotion()`並不在上述的安全區內，但我們仍一定得執行它。
+
+執行時，客戶程式勢必會以輸入/輸出的形式與`black_friday_promotion()`交換資料。
+
+經過整理後，所有從安全區離開的資料都可能被不受信任的函式修改，所以是潛在可變的，而從外面進入安全區者亦是如此。
+
+不受信任的函式有可能保留資料的參照，並隨時修改參照上的值，所以在寫入時維持不變性的前提下交換資料成了一大挑戰。
+
+---
+
+```
+                 不受信任的程式
+                 ⚠️   ⚠️
+              ⚠️         ⚠️
+           ⚠️               ⚠️
+          ⚠️    ┌───────┐    ⚠️
+         ⚠️     │   ✓   │     ⚠️
+         ⚠️     │ ✓   ✓ │     ⚠️  ←── 安全區
+          ⚠️    └───────┘    ⚠️
+           ⚠️      ↑  ↓     ⚠️
+              ⚠️         ⚠️
+                 ⚠️   ⚠️
+
+← 進入安全區的資料是可變的
+← 離開安全區的資料是可變的
+```
+
+---
+
+各位已在前一章看過寫入時複製了，但該技巧在這裡卻派不上用場。寫入時複製要求在修改資料前先複製，因此你得瞭解修改發生在何處，才知道哪裡需要複製。
+但在`black_friday_promotion()`的例子裡，程式碼實在太過龐雜，導致我們難以弄清該函式到底做了哪些事。
+有鑑於此，此處需改用能徹底避免資料修改的強大保護措施，即防禦型複製！
 
 ---
 
 ## 7.3 防禦型複製能守護資料不變性
 
+逃免資料被不受信任程式改變的方法是：`在資料傳入與傳出安全區時進行複製`
+
+首先討論如何保護傳入安全區的資料。
+當資料從不受信任的函式進入安全區時，應假設其為可變的。
+此時需立即對其產生深拷貝（deep copy）複本，然後將源始資料丟棄。
+由於這麼做能保證只有`受信任程式具有複本的參照`，故能維持資料不變。
+
+---
+
+O：表示原始資料 ｜ C：表示複本
+
+### 1. 不受信任程式中的資料
+
+```
+    ⚠️
+  ⚠️   ⚠️
+ ⚠️     ⚠️
+⚠️ ┌───┐ ⚠️
+⚠️ │ ✓ │ ⚠️
+⚠️ └───┘ ⚠️
+ ⚠️  ↑  ⚠️
+  ⚠️ O ⚠️
+    ⚠️
+  安全區
+```
+
+---
+
+### 2. 資料進入安全區
+
+```
+     ⚠️
+  ⚠️    ⚠️
+ ⚠️      ⚠️
+⚠️  ┌───┐ ⚠️
+⚠️  │ ✓ │ ⚠️
+⚠️  │ O │ ⚠️
+ ⚠️ └───┘⚠️
+  ⚠️   ⚠️
+    ⚠️
+
+原始資料O經沒用，請將其拋棄
+```
+
+---
+
+### 3. 產生深拷貝複本
+
+```
+     ⚠️
+  ⚠️    ⚠️
+ ⚠️      ⚠️
+⚠️  ┌───┐ ⚠️
+⚠️  │ ✓ │ ⚠️
+⚠️  │O C│ ⚠️
+ ⚠️ └───┘⚠️
+  ⚠️   ⚠️
+    ⚠️
+
+派拷貝複本留在安全區內
+此資料被修改也沒關係
+```
+
+---
+
+### 1. 安全區中的資料
+
+```
+     ⚠️
+  ⚠️    ⚠️
+ ⚠️      ⚠️
+⚠️  ┌───┐ ⚠️
+⚠️  │ ✓ │ ⚠️
+⚠️  │ O │ ⚠️
+ ⚠️ └───┘⚠️
+  ⚠️   ⚠️
+    ⚠️
+  安全區
+```
+
+---
+
+### 2. 產生深拷貝複本
+
+```
+     ⚠️
+  ⚠️    ⚠️
+ ⚠️      ⚠️
+⚠️  ┌───┐ ⚠️
+⚠️  │ ✓ │ ⚠️
+⚠️  │O C│ ⚠️
+ ⚠️ └───┘⚠️
+  ⚠️   ⚠️
+    ⚠️
+
+原始資料從未離開安全區
+```
+
+---
+
+### 3. 深拷貝複本離開安全區
+
+```
+     ⚠️
+  ⚠️    ⚠️
+ ⚠️  C   ⚠️
+⚠️  ┌───┐ ⚠️
+⚠️  │ ✓ │ ⚠️
+⚠️  │ O │ ⚠️
+ ⚠️ └───┘⚠️
+  ⚠️   ⚠️
+    ⚠️
+
+派拷貝複本進入不受信任的程式
+此資料被修改也沒關係
+```
+
+---
+
+以上就是防禦型複製的概念：`當資料進入時做深拷貝，離開時也做深拷貝`。
+
+上述操作能確保:
+不可變資料永不離開安全區，可變資料則永遠無法進入。
+
+瞭解這一點後
+讓我們討論如何將此技巧套用在`black_friday_promotion()`上吧！
+
 ---
 
 ## 7.4 實作防禦型複製
+
+什麼是防禦型複製？
+
+當我們呼叫會改變傳入引數的函式時，防禦型複製能確保安全區中的資料維持不變，這樣就能維持程式的不變性。
+
+例如：
+    •    black_friday_promotion() 會修改 shopping_cart。
+    •     解法就是在傳入前先建立 深拷貝（deep copy），確保原資料不被修改。
+
+---
+
+原始程式（未防禦）
+
+```js
+function add_item_to_cart(name, price) {
+    var item = make_cart_item(name, price);
+    shopping_cart = add_item(shopping_cart, item);
+
+    var total = calc_total(shopping_cart);
+    set_cart_total_dom(total);
+    update_shipping_icons(shopping_cart);
+    update_tax_dom(total);
+
+    black_friday_promotion(shopping_cart);
+}
+```
+
+問題在於 `black_friday_promotion()` 直接修改了 shopping_cart！
+
+---
+
+解法一：資料離開安全區前先複製
+
+```js
+function add_item_to_cart(name, price) {
+    var item = make_cart_item(name, price);
+    shopping_cart = add_item(shopping_cart, item);
+
+    var total = calc_total(shopping_cart);
+    set_cart_total_dom(total);
+    update_shipping_icons(shopping_cart);
+    update_tax_dom(total);
+
+    var cart_copy = deepCopy(shopping_cart); // 離開安全區前先複製
+    black_friday_promotion(cart_copy);
+}
+```
+
+---
+
+解法二：資料離開與進入安全區皆複製
+
+```js
+function add_item_to_cart(name, price) {
+    var item = make_cart_item(name, price);
+    shopping_cart = add_item(shopping_cart, item);
+
+    var total = calc_total(shopping_cart);
+    set_cart_total_dom(total);
+    update_shipping_icons(shopping_cart);
+    update_tax_dom(total);
+
+    var cart_copy = deepCopy(shopping_cart); // 離開前複製
+    black_friday_promotion(cart_copy);
+    shopping_cart = deepCopy(cart_copy); // 進入安全區前再複製回來
+}
+```
+
+---
+
+-   防禦型複製 = 深拷貝機制（deepCopy）
+-   目的：讓程式邏輯在不變性的保障下進行資料傳遞與函式呼叫
+-   應用情境：當無法信任外部函式是否會改變資料時
 
 ---
 
 ## 7.5 防禦型複製的原則
 
+當我們必須使用「未實作不變性」的程式（即：不受信任的程式）時，
+防禦型複製（defensive copying） 就能確保資料維持不變。
+
+---
+
+## 以下是兩大基本原則：
+
+`原則一：資料離開安全區時需複製`
+當「不可變資料」要從安全區傳入「不受信任的函式」時，請依下列步驟保護資料不變性：
+    1.     產生不可變資料的深拷貝副本
+    2.     將複本傳入不受信任函式中
+
+`原則二：資料進入安全區時需複製`
+當從「不受信任函式」取得的資料可能已被改變，請依下列步驟保護安全區內的資料結構：
+    1.     產生可能變資料的深拷貝副本
+    2.     在安全區內使用複本
+
+---
+
+## 🔖 小字典：什麼是深拷貝？
+
+深拷貝（deep copying）
+會複製資料中從最底層到最上層的所有資料結構。
+
+---
+
+## 原則應用順序？
+
+•     原則一與原則二不一定有先後順序。
+•     視資料進出安全區的情境而定：
+•     若要傳資料給不受信任函式 → 先離開安全區 → 適用原則一
+•     若從不受信任函式取資料 → 進入安全區 → 適用原則二
+•     有時需兩者同時適用。
+
 ---
 
 ## 7.6 將不受信任的程式包裝起來
+
+背景說明
+
+-   雖然已實作防禦型複製，但在程式中重複撰寫 deepCopy 的片段非常不方便。
+-   特別是 `black_friday_promotion()` 函式會多次呼叫，若每次都手動加深拷貝，很容易出錯。
+
+問題解法
+
+我們可以將 `black_friday_promotion() 包裝成含有防禦型複製的函式`，提升安全性與可重用性！
+
+---
+
+### 撰寫防禦型複製的包裝函式
+
+原本程式碼：
+
+```js
+function add_item_to_cart(name, price) {
+    var item = make_cart_item(name, price);
+    shopping_cart = add_item(shopping_cart, item);
+    var total = calc_total(shopping_cart);
+    set_cart_total_dom(total);
+    update_shipping_icons(shopping_cart);
+    update_tax_dom(total);
+    var cart_copy = deepCopy(shopping_cart); // 抽出
+    black_friday_promotion(cart_copy); // 抽出
+    shopping_cart = deepCopy(cart_copy); //抽出
+}
+```
+
+---
+
+可以抽取成以下函式：
+
+```js
+function black_friday_promotion_safe(cart) {
+    var cart_copy = deepCopy(cart);
+    black_friday_promotion(cart_copy);
+    return deepCopy(cart_copy);
+}
+```
+
+---
+
+修改呼叫端
+
+將原本的：
+
+```js
+var cart_copy = deepCopy(shopping_cart);
+black_friday_promotion(cart_copy);
+shopping_cart = deepCopy(cart_copy);
+```
+
+改成更簡潔的：
+
+```js
+shopping_cart = black_friday_promotion_safe(shopping_cart);
+```
+
+---
+
+擷取防禦型複製的程式
+
+```js
+function add_item_to_cart(name, price) {
+    var item = make_cart_item(name, price);
+    shopping_cart = add_item(shopping_cart, item);
+    var total = calc_total(shopping_cart);
+    set_cart_total_dom(total);
+    update_shipping_icons(shopping_cart);
+    update_tax_dom(total);
+
+    // use new function
+    shopping_cart = black_friday_promotion_safe(shopping_cart);
+}
+
+// new function
+function black_friday_promotion_safe(cart) {
+    var cart_copy = deepCopy(cart);
+    black_friday_promotion(cart_copy);
+    return deepCopy(cart_copy);
+}
+```
+
+---
+
+優點
+
+-   black_friday_promotion_safe() 更容易使用。
+-   不需要在呼叫處每次手動處理深拷貝。
+-   能確保傳入與傳出的資料皆維持不變性。
+
+👩🏼‍💻:「下個月同樣會用到 black_friday_promotion() 吧！只要將其包裝在具有防禦型複製的新函式裡，下次就能放心呼叫了！」
 
 ---
 
 ## 7.7 你或許看過的防禦型複製
 
+防禦型複製 是一種常見但不易察覺的程式設計技巧
+以下是兩個實務上的例子：
+
 ---
 
-## 7.8 比較『寫入時複製』與『防禦型複製』
+1. 網路應用程式開發介面中的防禦型複製
+
+-   常見於 API（application programming interface） 的資料傳輸過程。
+-   例如：當使用 JSON 形式送入 API 時，接收端會自動先將資料深拷貝成資料結構，再進行內部處理。
+-   這樣的設計避免直接操作原始 JSON 對象，保證資料不被意外更改。
+
+小結：這是一種針對資料來源與使用分離的「防禦型複製」策略，也是微服務（microservice）與服務導向架構（SOA）中的關鍵原則。
+
+---
+
+2. Erlang 與 Elixir 裡的防禦型複製
+
+-   Erlang / Elixir 是函數式語言，擅長處理併發與分散式系統。
+-   它們的設計理念就是「防禦型複製」的最佳實例：
+-   程式間溝通是透過 mailbox 傳遞資料。
+-   每個 process 的 mailbox 像是一個 queue，不會直接操作彼此的資料。
+-   傳遞過程中會將資料「複製再傳送」，而不是傳參考！
+
+優點：確保 process 間不會互相汙染彼此資料，也就自然實現了資料不變性與高可靠性。
+
+---
+
+## 延伸閱讀
+
+想了解更多可參考：
+    •    [Erlang 官網](https://www.erlang.org/)
+    •    [Elixir 官網](https://elixir-lang.org/)
+
+建議：若想更深入了解防禦型複製概念，學習「微服務系統」與「Erlang 的程式設計」將是很好的起點！
+
+---
+
+## 🔖 小字典補充：
+
+服務導向架構（service-oriented architecture）
+是一種以「服務」為核心的系統設計方式，強調模組之間資料隔離與不共享，天生支持防禦型複製。
+
+---
+
+## 休息一下：關於資料複製的深入思考
+
+### <!--fit--> 問題 1：同時保留兩份資料（原始資料與複本），哪一份才代表使用者呢？
+
+很多人會認為「使用者」物件代表某特定個體，但在函式中若存在兩份資料，可能會疑惑哪一份才是使用者？
+
+重點是概念轉換：
+
+-   程式中`不應該用一個物件代表一個真實個體`。
+-   應理解「資料」只是與事件有關的事實記錄，並非代表特定人。
+-   所以在程式設計中，「使用者資料」只是資料，不應有唯一性執念。
+
+---
+
+### <!--fit--> 問題 2：「寫入時複製」與「防禦型複製」看起來好像一樣，有區別嗎？
+
+相同點：`兩者都能確保資料不變性`。
+
+`差異在於用途：`
+
+1. 防禦型複製：
+   當資料要離開安全區，進入不受信任的函式時使用（資料跨區傳遞）。
+
+2. 寫入時複製：
+   在安全區內部為了維持不變性所採取的寫法。
+
+---
+
+### 技術考量
+
+-   防禦型複製依賴「深拷貝」，而深拷貝需要遍歷資料的所有層級，代價不小。
+-   若只需在安全區內局部修改資料，使用「寫入時複製」會更節省資源。
+
+### 小結
+
+-   寫入時複製 與 防禦型複製 各有優勢。
+-   程式設計師應依據場景，選擇合適策略來維護資料不變性。
+
+---
+
+7.8 比較『寫入時複製』與『防禦型複製』
+
+| 項目      | 寫入時複製                                          | 防禦型複製                                                 |
+| --------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| **When**  | 當你能自行控制程式實作時                            | 當需與不受信任的程式交換資料時                             |
+| **Where** | 安全區內（函式內部或受控環境）                      | 資料進出安全區的地方                                       |
+| **Type**  | 淺拷貝，資源需求較低                                | 深拷貝，資源需求較高                                       |
+| **Steps** | 1. 對欲變更資料淺拷貝<br>2. 修改複本<br>3. 傳回複本 | 1. 資料進入安全區時做深拷貝<br>2. 資料離開安全區時做深拷貝 |
 
 ---
 
 ## 7.9 深拷貝所需資源較淺拷貝高
 
+深拷貝複本與淺拷貝複本的差異在於：
+
+-   前者與原始資料不會共享任何結構，因為嵌狀資料內的所有物件與陣列都被複製了。
+-   後者則是在沒有被修改的資料結構都是共享的：
+
+---
+
+```
+原始資料 shopping_cart        複本             修改後的 shopping_cart
+     [ , , ]  ──────────────────────────────────────────→ [ , , ]
+       │ │ │                                               │ │ │
+       ▼ ▼ ▼                                               ▼ │ │
+  {name: "t-shirt",                         {name: "t-shirt",│ │
+   price: 7}                                 price: 13}      │ │
+       │                                                     │ │
+       ▼                                                     │ │
+  {name: "socks",      ←─────────────────────────────────────┘ │
+   pric: 3}             共享參照                                │
+       │                                                       │
+       ▼                                                       │
+  {name: "shoes",      ←───────────────────────────────────────┘
+   price: 10}            共享參照
+```
+
+---
+
+```
+當原始資料來自不受信任的程式時，其中所有東西都有可能改變，所以我們得用深拷貝將每一層資料結構都複製才行：
+
+原始資料 shopping_cart   複本      已複製 shopping_cart
+     [ , , ]  ────────────────→ [ , , ]
+       │ │ │                     │ │ │
+       ▼ ▼ ▼                     ▼ ▼ ▼
+  {name: "t-shirt",    ──→  {name: "t-shirt",
+   price: 7}            複本  price: 7}
+         │                         │
+         ▼                         ▼
+  {name: "socks",      ──→  {name: "socks",
+   pric: 3}             複本  pric: 3}
+          │                          │
+          ▼                          ▼
+  {name: "shoes",      ──→  {name: "shoes",
+   price: 10}           複本  price: 10}
+```
+
+深拷貝消耗的資源較多，所以我們只會在不確定『寫入時複製』是否存在的場合中使用。
+
 ---
 
 ## 7.10 以 JavaScript 實作深拷貝很困難
+
+深拷貝的概念很簡單，所以實作上應該也不複雜才對。
+但由於 JavaScript 裡並沒有適用的標準函式庫，要正確深拷貝具實有一定難度。
+
+雖然如何實作強深拷貝不在本書的討論範圍內，書中還是給各位一些建議。
+推薦 [Lodash](lodash.com) 函式庫中的 `.cloneDeep()` 函式可產生單狀資料的深拷貝複本。
+Lodash 函式庫受到眾多 JavaScript 使用者的推崇。
+
+✏️ 這裡的『強』指能處理任何情況或資料
+
+---
+
+```js
+function deepCopy(thing) {
+    if (Array.isArray(thing)) {
+        var copy = [];
+        for (var i = 0; i < thing.length; i++) copy.push(deepCopy(thing[i])); // 用迴圈複製資料中的所有元素
+        return copy;
+    } else if (thing === null) {
+        return null;
+    } else if (typeof thing === "object") {
+        var copy = {};
+        var keys = Object.keys(thing);
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            copy[key] = deepCopy(thing[key]); // 用迴圈複製資料中的所有元素
+        }
+        return copy;
+    } else {
+        return thing; //字串、數字、布林值與函式本來就是不可變的，所以不需要複製
+    }
+}
+```
+
+---
+
+遺憾的是，JavaScript 中還存在許多資料型別是以上函式無法應付的，
+但該實作足以呈現深拷貝的關鍵，即：不僅要複製上層的陣列或物件，
+還必須以遞迴走訪其中的元素。
+
+## 實務上，建議各位務必使用諸如 Lodash 函式庫裡的強深拷貝實作。
+
+---
+
+# 練習 7-3
 
 ---
 
 ## ７.11 想像『寫入時複製』與『防禦型複製』之間的對話
 
+✍️ 寫入時複製：
+
+我保證資料不變，所以當然比較重要啦！😎
+
+🛡️ 防禦型複製：
+
+不對吧！我也能讓資料不變啊！🤨
+
 ---
 
-## Thank You
+✍️ 寫入時複製：
+
+但我用的淺拷貝更快，我的效率可是好上好多倍喔～ ⚡️
+
+🛡️ 防禦型複製：
+
+效率你來說不見得最重要喔！重點是只要資料一離開或進入安全區，我就能確保它不會被改變！🧠
+
+---
+
+✍️ 寫入時複製：
+
+安全區的設計完全是為了讓我可以發揮啊～這才是我存在的意義！💼
+
+🛡️ 防禦型複製：
+
+理想很好，但你也知道實務上那些 API、外部函式、黑箱太多了啦，哪有可能全部改寫？現實是殘酷的！💻❌
+
+---
+
+✍️ 寫入時複製：
+
+你說得對……我不能沒有你！我們是好夥伴！😭
+
+🛡️ 防禦型複製（眼眶泛淚）：
+
+別哭啦！我也離不開你啊……🥹
+
+> 於是，他們停止爭辯，並緊緊地擁抱在一起……
+
+---
+
+# 練習 7-4
+
+---
+
+# 練習 7-5
+
+---
+
+## 結論
+
+在本章中，我們學會了兩種強大的資料不變性實作方法：
+
+1. 寫入時複製（Copy-on-write）：
+   在程式邏輯可控時，效率高、淺拷貝即可應用。
+2. 防禦型複製（Defensive Copying）：
+   當資料要離開安全區、進入不可預期或不受信任的函式時，能有效保護資料不被改變。
+
+小提醒：不要把防禦型複製當作寫入時複製的替代，而是根據「場景」靈活選擇，甚至可以搭配使用！
+
+---
+
+重點整理
+
+-   防禦型複製是`針對跨安全區存取資料時保護資料`的一種方法。
+-   因為深拷貝會耗費更多資源，所以只在必要時使用。
+-   防禦型複製確保與不變性程式互動時，資料仍可保持不變。
+-   寫入時複製則拷貝較少資料，當資料修改只發生在受控區域時更有效率。
+-   深拷貝會遍歷每一層資料結構，成本高，但也最穩定。
+
+---
+
+# Thank You For Your Listening 🥰
+
+接下來…
+下一章，我們將以本章知識為基礎，討論一種可以改變系統設計思維的程式架構！
+
+-   Presenter : Hannah
+-   Note Taker : Monica
+    Date : 2025/05/15
