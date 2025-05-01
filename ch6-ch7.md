@@ -461,7 +461,53 @@ array;
 
 ---
 
-# 練習 6-1
+## 練習 6-1：將全域更新邏輯改為寫入時複製
+
+以下程式碼會將電子郵件地址加入到郵寄名單 `mailing_list`（為一全域變數）中：
+
+```js
+var mailing_list = [];
+
+function add_contact(email) {
+    mailing_list.push(email);
+}
+
+function submit_form_handler(event) {
+    var form = event.target;
+    var email = form.elements["email"].value;
+    add_contact(email);
+}
+```
+
+---
+
+任務：
+
+請將上述程式碼改寫為寫入時複製版本，注意：
+    1.    add_contact() 不應再直接操作全域變數，改為以 mailing_list 為參數傳入，並回傳新版本。
+    2.    submit_form_handler() 中接收 add_contact() 回傳值，並指定給全域 mailing_list。
+
+請於程式中實作這兩點！
+
+---
+
+# 解答：寫入時複製版本
+
+```js
+var mailing_list = [];
+
+function add_contact(mailing_list, email) {
+    var list_copy = mailing_list.slice(); // 拷貝原陣列
+    list_copy.push(email); // 加入新項目
+    return list_copy; // 回傳複本
+}
+
+function submit_form_handler(event) {
+    var form = event.target;
+    var email = form.elements["email"].value;
+    mailing_list = add_contact(mailing_list, email); // 更新全域變數
+}
+```
 
 ---
 
@@ -635,7 +681,74 @@ function shift(array) {
 
 ---
 
-# 練習 6-2
+## 練習 6-2：將 .pop() 改寫為寫入時複製版本
+
+我們目標是撰寫一個寫入時複製的 `.pop()` 方法版本。
+
+回顧 `.pop()` 的行為：
+
+```js
+var a = [1, 2, 3, 4];
+var b = a.pop(); // b = 4
+console.log(a); // [1, 2, 3]
+```
+
+請改寫為「寫入時複製」版本，並試著：
+    1.     將「讀取」與「寫入」分解為兩個函式
+    2.     撰寫一個函式可傳回兩個值（新陣列 + 被移除元素）
+
+---
+
+### 練習 6-2 解答
+
+作法一：將「讀取」與「寫入」分成兩個函式
+
+```js
+// 讀取陣列最後一個元素
+function last_element(array) {
+    return array[array.length - 1];
+}
+
+// 移除陣列最後一個元素（寫入動作）
+function drop_last(array) {
+    array.pop();
+}
+```
+
+---
+
+但上述 drop_last 仍會直接改動原陣列，需改為「寫入時複製」版本：
+
+```js
+function drop_last(array) {
+    var array_copy = array.slice();
+    array_copy.pop();
+    return array_copy;
+}
+```
+
+---
+
+作法二：撰寫一個函式傳回兩個值
+
+```js
+function pop(array) {
+    return array.pop();
+}
+```
+
+改寫為「寫入時複製」版本：
+
+```js
+function pop(array) {
+    var array_copy = array.slice();
+    var first = array_copy.pop();
+    return {
+        first: first,
+        array: array_copy,
+    };
+}
+```
 
 ---
 
@@ -669,11 +782,92 @@ function shift(array) {
 
 ---
 
-# 練習 6-4
+## 練習 6-3：寫入時複製的 push()
+
+請將陣列的 `.push()` method（把指定元素加入陣列最後）  
+改寫成具備「寫入時複製」的版本：
+
+```js
+function push(array, elem) {
+    // 將你的實作寫於此處
+}
+```
 
 ---
 
-# 練習 6-5
+解答：
+
+```js
+function push(array, elem) {
+    var copy = array.slice();
+    copy.push(elem);
+    return copy;
+}
+```
+
+---
+
+## 練習 6-4：重構 add_contact 使用 push()
+
+下列原始的 `add_contact()` 程式碼：
+
+```js
+function add_contact(mailing_list, email) {
+    var list_copy = mailing_list.slice();
+    list_copy.push(email);
+    return list_copy;
+}
+```
+
+請改寫為使用練習 6-3 中的 push() 函式：
+
+```js
+function add_contact(mailing_list, email) {
+    // 實作在此
+}
+```
+
+---
+
+解答：
+
+```js
+function add_contact(mailing_list, email) {
+    return push(mailing_list, email);
+}
+```
+
+---
+
+## 練習 6-5：寫入時複製的 arraySet
+
+請將指定陣列元素的操作，改寫為具備「寫入時複製」的 `arraySet()` 函式：
+
+原始操作：
+
+```js
+a[15] = 2;
+```
+
+請改寫為：
+
+```js
+function arraySet(array, idx, value) {
+    // 將你的實作寫於此處
+}
+```
+
+---
+
+解答：
+
+```js
+function arraySet(array, idx, value) {
+    var copy = array.slice();
+    copy[idx] = value;
+    return copy;
+}
+```
 
 ---
 
@@ -924,19 +1118,118 @@ true
 
 ---
 
-# 練習 6-6
+## 練習 6-6：實作寫入時複製的 objectSet
+
+請將物件的指定操作，改寫為具備寫入時複製的 `objectSet()` 函式。  
+例如，這段指定操作：
+
+```js
+object["price"] = 37;
+```
+
+應該改寫為：
+
+```js
+function objectSet(object, key, value) {
+    // 將你的實作寫於此處
+}
+```
 
 ---
 
-# 練習 6-7
+解答：
+
+```js
+function objectSet(object, key, value) {
+    var copy = Object.assign({}, object);
+    copy[key] = value;
+    return copy;
+}
+```
 
 ---
 
-# 練習 6-8
+## 練習 6-7：重構 setPrice 為使用 objectSet 的版本
+
+請用練習 6-6 的 `objectSet()` 重構以下的 `setPrice()` 函式：
+
+原本版本：
+
+```js
+function setPrice(item, new_price) {
+    var item_copy = Object.assign({}, item);
+    item_copy.price = new_price;
+    return item_copy;
+}
+```
 
 ---
 
-# 練習 6-9
+解答：
+
+```js
+function setPrice(item, new_price) {
+    return objectSet(item, "price", new_price);
+}
+```
+
+---
+
+## 練習 6-8：實作寫入時複製的 setQuantity
+
+請用練習 6-6 的 objectSet() 撰寫一個能修改商品數量（quantity）的 `setQuantity()` 函式，  
+需實作寫入時複製。
+
+## 函式原型：
+
+```js
+function setQuantity(item, new_quantity) {
+    // 將你的實作寫於此處
+}
+```
+
+---
+
+解答：
+
+```js
+function setQuantity(item, new_quantity) {
+    return objectSet(item, "quantity", new_quantity);
+}
+```
+
+---
+
+## 練習 6-9：將 delete 操作改寫為寫入時複製形式
+
+請將物件的 `delete` 操作實作為具備寫入時複製的函式：
+
+原始範例：
+
+```js
+var a = { x: 1 };
+delete a["x"];
+```
+
+請將上述操作改寫為寫入時複製版本：
+
+```js
+function objectDelete(object, key) {
+    // 將你的實作寫於此處
+}
+```
+
+---
+
+解答：
+
+```js
+function objectDelete(object, key) {
+    var copy = Object.assign({}, object);
+    delete copy[key];
+    return copy;
+}
+```
 
 ---
 
@@ -1140,11 +1433,75 @@ function setPrice(item, new_price) {
 
 ---
 
-# 練習 ６-10
+## 練習 6-10：識別淺拷貝與變動對象
+
+題目：`shopping_cart` 陣列共有 4 件商品：
+
+```js
+shopping_cart = [
+    { name: "shoes", price: 10 },
+    { name: "socks", price: 3 },
+    { name: "pants", price: 27 },
+    { name: "t-shirt", price: 7 },
+];
+```
+
+執行以下程式後：`setPriceByName(shopping_cart, "socks", 2);`
+
+請問：哪些東西會被複製？
 
 ---
 
-# 練習 ６-11
+根據淺拷貝原則：只會複製「需要修改的物件」與其直接容器（即陣列本身）。
+
+變動發生在 "socks" 物件，因此：
+    •     陣列本身（shopping_cart）需要拷貝
+    •    "socks" 物件需要拷貝
+
+---
+
+圖解（簡化）
+
+```
+原始 shopping_cart
+┌────────────────────────────────────────────────────┐
+│ [ shoes ] → { name: "shoes", price: 10 }           │
+│ [ socks ] → { name: "socks", price: 3 } ← ★ 將被複製 │
+│ [ pants ] → { name: "pants", price: 27 }           │
+│ [t-shirt] → { name: "t-shirt", price: 7 }          │
+└────────────────────────────────────────────────────┘
+         ↑
+         陣列被複製（包含 socks 的指向）
+
+結果：複製的只有「陣列」與「socks」
+```
+
+---
+
+## 練習 ６-11
+
+請將以下巢狀資料操作改成寫入時複製版本：
+
+```javascript
+function setQuantityByName(cart, name, quantity) {
+    for (var i = 0; i < cart.length; i++) {
+        if (cart[i].name === name) cart[i].quantity = quantity;
+    }
+}
+```
+
+---
+
+```javascript
+function setQuantityByName(cart, name, quantity) {
+    var cartCopy = cart.slice();
+    for (var i = 0; i < cartCopy.length; i++) {
+        if (cartCopy[i].name === name)
+            cartCopy[i] = Object.set(cartCopy[i], "quantity", quantity);
+    }
+    return cartCopy;
+}
+```
 
 ---
 
